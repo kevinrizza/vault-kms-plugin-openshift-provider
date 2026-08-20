@@ -4,7 +4,9 @@
 package e2e
 
 import (
+	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -38,6 +40,77 @@ var _ = Describe("Vault KMS Plugin OpenShift Provider", Ordered, func() {
 				g.Expect(output).To(Equal("Running"))
 			}
 			Eventually(verifyPodRunning).Should(Succeed())
+		})
+	})
+
+	Context("Namespace restriction", func() {
+		const wrongNamespace = "wrong-namespace-test"
+
+		BeforeAll(func() {
+			cmd := exec.Command("kubectl", "create", "namespace", wrongNamespace)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterAll(func() {
+			cmd := exec.Command("kubectl", "delete", "namespace", wrongNamespace, "--ignore-not-found")
+			_, _ = utils.Run(cmd)
+		})
+
+		It("should fail to start when running in the wrong namespace", func() {
+			By("getting the operator image from the existing deployment")
+			cmd := exec.Command("kubectl", "get", "deployment",
+				"-l", "control-plane=controller-manager",
+				"-n", namespace,
+				"-o", "jsonpath={.items[0].spec.template.spec.containers[0].image}")
+			image, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(image).NotTo(BeEmpty())
+
+			By("creating a pod in the wrong namespace with POD_NAMESPACE set via the downward API")
+			podManifest := fmt.Sprintf(`apiVersion: v1
+kind: Pod
+metadata:
+  name: namespace-restriction-test
+  namespace: %s
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+  - name: manager
+    image: %s
+    imagePullPolicy: IfNotPresent
+    command: ["/manager"]
+    env:
+    - name: POD_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    securityContext:
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+`, wrongNamespace, image)
+
+			cmd = exec.Command("kubectl", "apply", "-f", "-")
+			cmd.Stdin = strings.NewReader(podManifest)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("verifying the pod fails with a namespace restriction error")
+			verifyPodFailed := func(g Gomega) {
+				cmd := exec.Command("kubectl", "logs",
+					"namespace-restriction-test",
+					"-n", wrongNamespace)
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(ContainSubstring("Namespace restriction violated"))
+			}
+			Eventually(verifyPodFailed).Should(Succeed())
 		})
 	})
 

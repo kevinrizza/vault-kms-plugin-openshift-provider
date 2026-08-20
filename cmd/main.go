@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -37,6 +38,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	// +kubebuilder:scaffold:imports
 )
+
+const openshiftPluginNamespace = "openshift-kms-plugin-provider"
 
 var (
 	scheme   = runtime.NewScheme()
@@ -83,6 +86,17 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	podNamespace := os.Getenv("POD_NAMESPACE")
+	if podNamespace == "" {
+		setupLog.Error(fmt.Errorf("POD_NAMESPACE environment variable is not set"), "Failed to determine pod namespace")
+		os.Exit(1)
+	}
+	if podNamespace != openshiftPluginNamespace {
+		setupLog.Error(fmt.Errorf("operator must run in namespace %q, but is running in %q", openshiftPluginNamespace, podNamespace),
+			"Namespace restriction violated")
+		os.Exit(1)
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -177,7 +191,7 @@ func main() {
 
 	if err := (&controller.VaultKMSProviderConfigMapReconciler{
 		Client:    mgr.GetClient(),
-		Namespace: "openshift-kms-plugin-provider",
+		Namespace: openshiftPluginNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "VaultKMSProviderConfigMap")
 		os.Exit(1)
