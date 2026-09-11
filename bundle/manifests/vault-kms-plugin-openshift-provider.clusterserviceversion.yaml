@@ -4,14 +4,19 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-    createdAt: "2026-08-19T18:40:47Z"
+    createdAt: "2026-09-11T19:50:35Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.3
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: vault-kms-plugin-openshift-provider.v0.0.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
-  customresourcedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - displayName: Vault KMSConfig
+      kind: VaultKMSConfig
+      name: vaultkmsconfigs.kms.openshift.io
+      version: v1alpha1
   description: Operator to define KMS plugin configuration for OpenShift clusters.
   displayName: Vault KMS Plugin OpenShift Provider
   icon:
@@ -22,16 +27,31 @@ spec:
       clusterPermissions:
       - rules:
         - apiGroups:
-          - ""
+          - kms.openshift.io
           resources:
-          - configmaps
+          - vaultkmsconfigs
           verbs:
           - create
+          - delete
           - get
           - list
           - patch
           - update
           - watch
+        - apiGroups:
+          - kms.openshift.io
+          resources:
+          - vaultkmsconfigs/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - kms.openshift.io
+          resources:
+          - vaultkmsconfigs/status
+          verbs:
+          - get
+          - patch
+          - update
         - apiGroups:
           - authentication.k8s.io
           resources:
@@ -147,13 +167,13 @@ spec:
         serviceAccountName: vault-kms-controller-manager
     strategy: deployment
   installModes:
-  - supported: true
+  - supported: false
     type: OwnNamespace
   - supported: false
     type: SingleNamespace
   - supported: false
     type: MultiNamespace
-  - supported: false
+  - supported: true
     type: AllNamespaces
   maturity: alpha
   provider:

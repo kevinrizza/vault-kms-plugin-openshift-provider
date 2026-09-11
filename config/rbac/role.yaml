@@ -5,13 +5,28 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - ""
+  - kms.openshift.io
   resources:
-  - configmaps
+  - vaultkmsconfigs
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
   - update
   - watch
+- apiGroups:
+  - kms.openshift.io
+  resources:
+  - vaultkmsconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kms.openshift.io
+  resources:
+  - vaultkmsconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
