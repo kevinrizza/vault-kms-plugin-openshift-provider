@@ -4,13 +4,16 @@
 package e2e
 
 import (
-	"os/exec"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/kevinrizza/vault-kms-plugin-openshift-provider/test/utils"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	kmsv1alpha1 "github.com/kevinrizza/vault-kms-plugin-openshift-provider/api/v1alpha1"
 )
 
 var _ = Describe("Vault KMS Plugin OpenShift Provider", Ordered, func() {
@@ -19,84 +22,104 @@ var _ = Describe("Vault KMS Plugin OpenShift Provider", Ordered, func() {
 
 	Context("OLM installation", func() {
 		It("should have a CSV in Succeeded phase", func() {
-			cmd := exec.Command("kubectl", "get", "csv",
-				"-n", namespace,
-				"-o", "jsonpath={.items[0].status.phase}")
-			output, err := utils.Run(cmd)
+			csvList, err := kubeClient.Discovery().RESTClient().
+				Get().
+				AbsPath("/apis/operators.coreos.com/v1alpha1").
+				Namespace(namespace).
+				Resource("clusterserviceversions").
+				DoRaw(ctx)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(output).To(Equal("Succeeded"))
+			Expect(string(csvList)).To(ContainSubstring(`"phase":"Succeeded"`))
 		})
 
 		It("should have the controller manager pod running", func() {
 			verifyPodRunning := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "pods",
-					"-l", "control-plane=controller-manager",
-					"-n", namespace,
-					"-o", "jsonpath={.items[0].status.phase}")
-				output, err := utils.Run(cmd)
+				pods, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+					LabelSelector: "control-plane=controller-manager",
+				})
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("Running"))
+				g.Expect(pods.Items).NotTo(BeEmpty())
+				g.Expect(string(pods.Items[0].Status.Phase)).To(Equal("Running"))
 			}
 			Eventually(verifyPodRunning).Should(Succeed())
 		})
 	})
 
-	Context("ConfigMap reconciliation", func() {
-		It("should create the ConfigMap with the correct data", func() {
-			verifyConfigMap := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "configmap",
-					"ibm-kms-vault-plugin-provider",
-					"-n", namespace,
-					"-o", "jsonpath={.data.image}")
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("quay.io/kevinrizza/test-vault-plugin-image:latest"))
+	Context("VaultKMSConfig CRD", func() {
+		const configName = "e2e-vault-config"
+
+		AfterAll(func() {
+			config := &kmsv1alpha1.VaultKMSConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: configName,
+				},
 			}
-			Eventually(verifyConfigMap).Should(Succeed())
+			_ = k8sClient.Delete(ctx, config)
 		})
 
-		It("should restore the ConfigMap after deletion", func() {
-			By("deleting the ConfigMap")
-			cmd := exec.Command("kubectl", "delete", "configmap",
-				"ibm-kms-vault-plugin-provider",
-				"-n", namespace)
-			_, err := utils.Run(cmd)
+		It("should accept the CRD on the cluster", func() {
+			_, err := kubeClient.Discovery().RESTClient().
+				Get().
+				AbsPath("/apis/apiextensions.k8s.io/v1/customresourcedefinitions/vaultkmsconfigs.kms.openshift.io").
+				DoRaw(ctx)
 			Expect(err).NotTo(HaveOccurred())
-
-			By("verifying the ConfigMap is recreated")
-			verifyRecreated := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "configmap",
-					"ibm-kms-vault-plugin-provider",
-					"-n", namespace,
-					"-o", "jsonpath={.data.image}")
-				output, err := utils.Run(cmd)
-				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("quay.io/kevinrizza/test-vault-plugin-image:latest"))
-			}
-			Eventually(verifyRecreated).Should(Succeed())
 		})
 
-		It("should restore the ConfigMap data after modification", func() {
-			By("modifying the ConfigMap data")
-			cmd := exec.Command("kubectl", "patch", "configmap",
-				"ibm-kms-vault-plugin-provider",
-				"-n", namespace,
-				"--type", "merge",
-				"-p", `{"data":{"image":"tampered-value"}}`)
-			_, err := utils.Run(cmd)
+		It("should create a VaultKMSConfig resource", func() {
+			config := &kmsv1alpha1.VaultKMSConfig{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: configName,
+				},
+				Spec: kmsv1alpha1.VaultKMSConfigSpec{
+					VaultAddress: "https://vault.example.com:8200",
+					VaultKeyPath: "transit/keys/my-key",
+					Authentication: kmsv1alpha1.VaultAuthentication{
+						Type: kmsv1alpha1.VaultAuthenticationTypeAppRole,
+						AppRole: kmsv1alpha1.VaultAppRoleAuthentication{
+							Secret: kmsv1alpha1.VaultSecretReference{
+								Name: "vault-approle-creds",
+							},
+						},
+					},
+				},
+			}
+			err := k8sClient.Create(ctx, config)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should reconcile the status with spec fields and plugin image", func() {
+			verifyStatus := func(g Gomega) {
+				config := &kmsv1alpha1.VaultKMSConfig{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: configName}, config)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(config.Status.VaultAddress).To(Equal("https://vault.example.com:8200"))
+				g.Expect(config.Status.VaultKeyPath).To(Equal("transit/keys/my-key"))
+				g.Expect(config.Status.KMSPluginImage).To(Equal("quay.io/kevinrizza/test-vault-plugin-image:latest"))
+				g.Expect(string(config.Status.Authentication.Type)).To(Equal("AppRole"))
+			}
+			Eventually(verifyStatus).Should(Succeed())
+		})
+
+		It("should update the status when the spec is modified", func() {
+			By("patching the spec with a new vault address")
+			config := &kmsv1alpha1.VaultKMSConfig{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: configName}, config)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("verifying the ConfigMap data is restored")
-			verifyRestored := func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "configmap",
-					"ibm-kms-vault-plugin-provider",
-					"-n", namespace,
-					"-o", "jsonpath={.data.image}")
-				output, err := utils.Run(cmd)
+			patch := client.MergeFrom(config.DeepCopy())
+			config.Spec.VaultAddress = "https://vault-new.example.com:8200"
+			err = k8sClient.Patch(ctx, config, patch)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("verifying the status reflects the new address")
+			verifyUpdated := func(g Gomega) {
+				updated := &kmsv1alpha1.VaultKMSConfig{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: configName}, updated)
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(output).To(Equal("quay.io/kevinrizza/test-vault-plugin-image:latest"))
+				g.Expect(updated.Status.VaultAddress).To(Equal("https://vault-new.example.com:8200"))
+				g.Expect(updated.Status.KMSPluginImage).To(Equal("quay.io/kevinrizza/test-vault-plugin-image:latest"))
 			}
-			Eventually(verifyRestored).Should(Succeed())
+			Eventually(verifyUpdated).Should(Succeed())
 		})
 	})
 })

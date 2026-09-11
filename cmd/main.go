@@ -177,14 +177,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.VaultKMSProviderConfigMapReconciler{
-		Client:    mgr.GetClient(),
-		Namespace: "openshift-kms-plugin-provider",
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "VaultKMSProviderConfigMap")
-		os.Exit(1)
-	}
-
 	if err := (&controller.VaultKMSConfigReconciler{
 		Client: mgr.GetClient(),
 	}).SetupWithManager(mgr); err != nil {

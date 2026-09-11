@@ -29,13 +29,17 @@ import (
 
 var _ = Describe("VaultKMSConfig Controller", func() {
 	const (
-		timeout  = 10 * time.Second
-		interval = 250 * time.Millisecond
+		timeout          = 10 * time.Second
+		interval         = 250 * time.Millisecond
+		testConfigName   = "test-config"
+		testVaultAddress = "https://vault.example.com:8200"
+		testVaultKeyPath = "transit/keys/my-key"
+		testSecretName   = "vault-approle-creds"
 	)
 
 	AfterEach(func() {
 		config := &kmsv1alpha1.VaultKMSConfig{}
-		err := k8sClient.Get(ctx, types.NamespacedName{Name: "test-config"}, config)
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: testConfigName}, config)
 		if err == nil {
 			Expect(k8sClient.Delete(ctx, config)).To(Succeed())
 		}
@@ -45,16 +49,16 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 		It("should populate the status with spec fields and the default plugin image", func() {
 			config := &kmsv1alpha1.VaultKMSConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-config",
+					Name: testConfigName,
 				},
 				Spec: kmsv1alpha1.VaultKMSConfigSpec{
-					VaultAddress: "https://vault.example.com:8200",
-					VaultKeyPath: "transit/keys/my-key",
+					VaultAddress: testVaultAddress,
+					VaultKeyPath: testVaultKeyPath,
 					Authentication: kmsv1alpha1.VaultAuthentication{
 						Type: kmsv1alpha1.VaultAuthenticationTypeAppRole,
 						AppRole: kmsv1alpha1.VaultAppRoleAuthentication{
 							Secret: kmsv1alpha1.VaultSecretReference{
-								Name: "vault-approle-creds",
+								Name: testSecretName,
 							},
 						},
 					},
@@ -64,23 +68,23 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 
 			Eventually(func(g Gomega) {
 				var fetched kmsv1alpha1.VaultKMSConfig
-				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "test-config"}, &fetched)).To(Succeed())
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testConfigName}, &fetched)).To(Succeed())
 				g.Expect(fetched.Status.KMSPluginImage).To(Equal(DefaultKMSPluginImage))
-				g.Expect(fetched.Status.VaultAddress).To(Equal("https://vault.example.com:8200"))
-				g.Expect(fetched.Status.VaultKeyPath).To(Equal("transit/keys/my-key"))
+				g.Expect(fetched.Status.VaultAddress).To(Equal(testVaultAddress))
+				g.Expect(fetched.Status.VaultKeyPath).To(Equal(testVaultKeyPath))
 				g.Expect(fetched.Status.Authentication.Type).To(Equal(kmsv1alpha1.VaultAuthenticationTypeAppRole))
-				g.Expect(fetched.Status.Authentication.AppRole.Secret.Name).To(Equal("vault-approle-creds"))
+				g.Expect(fetched.Status.Authentication.AppRole.Secret.Name).To(Equal(testSecretName))
 			}, timeout, interval).Should(Succeed())
 		})
 
 		It("should copy optional fields when set", func() {
 			config := &kmsv1alpha1.VaultKMSConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-config",
+					Name: testConfigName,
 				},
 				Spec: kmsv1alpha1.VaultKMSConfigSpec{
-					VaultAddress:       "https://vault.example.com:8200",
-					VaultKeyPath:       "transit/keys/my-key",
+					VaultAddress:       testVaultAddress,
+					VaultKeyPath:       testVaultKeyPath,
 					VaultNamespace:     "admin/team-a",
 					VaultAuthNamespace: "admin/auth",
 					TLS: kmsv1alpha1.VaultTLSConfig{
@@ -93,7 +97,7 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 						Type: kmsv1alpha1.VaultAuthenticationTypeAppRole,
 						AppRole: kmsv1alpha1.VaultAppRoleAuthentication{
 							Secret: kmsv1alpha1.VaultSecretReference{
-								Name: "vault-approle-creds",
+								Name: testSecretName,
 							},
 						},
 					},
@@ -103,7 +107,7 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 
 			Eventually(func(g Gomega) {
 				var fetched kmsv1alpha1.VaultKMSConfig
-				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "test-config"}, &fetched)).To(Succeed())
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testConfigName}, &fetched)).To(Succeed())
 				g.Expect(fetched.Status.KMSPluginImage).To(Equal(DefaultKMSPluginImage))
 				g.Expect(fetched.Status.VaultNamespace).To(Equal("admin/team-a"))
 				g.Expect(fetched.Status.VaultAuthNamespace).To(Equal("admin/auth"))
@@ -115,16 +119,16 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 		It("should update the status when the spec changes", func() {
 			config := &kmsv1alpha1.VaultKMSConfig{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-config",
+					Name: testConfigName,
 				},
 				Spec: kmsv1alpha1.VaultKMSConfigSpec{
-					VaultAddress: "https://vault.example.com:8200",
-					VaultKeyPath: "transit/keys/my-key",
+					VaultAddress: testVaultAddress,
+					VaultKeyPath: testVaultKeyPath,
 					Authentication: kmsv1alpha1.VaultAuthentication{
 						Type: kmsv1alpha1.VaultAuthenticationTypeAppRole,
 						AppRole: kmsv1alpha1.VaultAppRoleAuthentication{
 							Secret: kmsv1alpha1.VaultSecretReference{
-								Name: "vault-approle-creds",
+								Name: testSecretName,
 							},
 						},
 					},
@@ -134,20 +138,20 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 
 			Eventually(func(g Gomega) {
 				var fetched kmsv1alpha1.VaultKMSConfig
-				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "test-config"}, &fetched)).To(Succeed())
-				g.Expect(fetched.Status.VaultAddress).To(Equal("https://vault.example.com:8200"))
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testConfigName}, &fetched)).To(Succeed())
+				g.Expect(fetched.Status.VaultAddress).To(Equal(testVaultAddress))
 			}, timeout, interval).Should(Succeed())
 
 			By("updating the spec")
 			var current kmsv1alpha1.VaultKMSConfig
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "test-config"}, &current)).To(Succeed())
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testConfigName}, &current)).To(Succeed())
 			current.Spec.VaultAddress = "https://vault-new.example.com:8200"
 			current.Spec.VaultKeyPath = "transit/keys/new-key"
 			Expect(k8sClient.Update(ctx, &current)).To(Succeed())
 
 			Eventually(func(g Gomega) {
 				var fetched kmsv1alpha1.VaultKMSConfig
-				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "test-config"}, &fetched)).To(Succeed())
+				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testConfigName}, &fetched)).To(Succeed())
 				g.Expect(fetched.Status.VaultAddress).To(Equal("https://vault-new.example.com:8200"))
 				g.Expect(fetched.Status.VaultKeyPath).To(Equal("transit/keys/new-key"))
 				g.Expect(fetched.Status.KMSPluginImage).To(Equal(DefaultKMSPluginImage))

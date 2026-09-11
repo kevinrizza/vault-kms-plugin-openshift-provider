@@ -20,14 +20,18 @@ limitations under the License.
 package v1alpha1
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 var (
 	GroupVersion = schema.GroupVersion{Group: "kms.openshift.io", Version: "v1alpha1"}
 
-	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+	SchemeBuilder = runtime.NewSchemeBuilder(func(s *runtime.Scheme) error {
+		metav1.AddToGroupVersion(s, GroupVersion)
+		return s.SetVersionPriority(GroupVersion)
+	})
 
 	AddToScheme = SchemeBuilder.AddToScheme
 )
