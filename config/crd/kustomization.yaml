@@ -1,0 +1,2 @@
+resources:
+- bases/kms.openshift.io_vaultkmsconfigs.yaml

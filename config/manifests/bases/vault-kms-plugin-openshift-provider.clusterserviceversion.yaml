@@ -8,7 +8,12 @@ metadata:
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
-  customresourcedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - displayName: Vault KMSConfig
+      kind: VaultKMSConfig
+      name: vaultkmsconfigs.kms.openshift.io
+      version: v1alpha1
   description: Operator to define KMS plugin configuration for OpenShift clusters.
   displayName: Vault KMS Plugin OpenShift Provider
   icon:
