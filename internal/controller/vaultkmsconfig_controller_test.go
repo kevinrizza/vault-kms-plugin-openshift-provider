@@ -46,7 +46,7 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 	})
 
 	Context("when a VaultKMSConfig is created", func() {
-		It("should populate the status with spec fields and the default plugin image", func() {
+		It("should populate the status with the default plugin image", func() {
 			config := &kmsv1alpha1.VaultKMSConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testConfigName,
@@ -70,14 +70,10 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 				var fetched kmsv1alpha1.VaultKMSConfig
 				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testConfigName}, &fetched)).To(Succeed())
 				g.Expect(fetched.Status.KMSPluginImage).To(Equal(DefaultKMSPluginImage))
-				g.Expect(fetched.Status.VaultAddress).To(Equal(testVaultAddress))
-				g.Expect(fetched.Status.VaultKeyPath).To(Equal(testVaultKeyPath))
-				g.Expect(fetched.Status.Authentication.Type).To(Equal(kmsv1alpha1.VaultAuthenticationTypeAppRole))
-				g.Expect(fetched.Status.Authentication.AppRole.Secret.Name).To(Equal(testSecretName))
 			}, timeout, interval).Should(Succeed())
 		})
 
-		It("should copy optional fields when set", func() {
+		It("should set the default plugin image regardless of optional spec fields", func() {
 			config := &kmsv1alpha1.VaultKMSConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testConfigName,
@@ -109,14 +105,10 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 				var fetched kmsv1alpha1.VaultKMSConfig
 				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testConfigName}, &fetched)).To(Succeed())
 				g.Expect(fetched.Status.KMSPluginImage).To(Equal(DefaultKMSPluginImage))
-				g.Expect(fetched.Status.VaultNamespace).To(Equal("admin/team-a"))
-				g.Expect(fetched.Status.VaultAuthNamespace).To(Equal("admin/auth"))
-				g.Expect(fetched.Status.TLS.CABundle.Name).To(Equal("vault-ca-bundle"))
-				g.Expect(fetched.Status.TLS.ServerName).To(Equal("vault.internal.example.com"))
 			}, timeout, interval).Should(Succeed())
 		})
 
-		It("should update the status when the spec changes", func() {
+		It("should preserve the plugin image after spec changes", func() {
 			config := &kmsv1alpha1.VaultKMSConfig{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: testConfigName,
@@ -139,7 +131,7 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 			Eventually(func(g Gomega) {
 				var fetched kmsv1alpha1.VaultKMSConfig
 				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testConfigName}, &fetched)).To(Succeed())
-				g.Expect(fetched.Status.VaultAddress).To(Equal(testVaultAddress))
+				g.Expect(fetched.Status.KMSPluginImage).To(Equal(DefaultKMSPluginImage))
 			}, timeout, interval).Should(Succeed())
 
 			By("updating the spec")
@@ -152,8 +144,6 @@ var _ = Describe("VaultKMSConfig Controller", func() {
 			Eventually(func(g Gomega) {
 				var fetched kmsv1alpha1.VaultKMSConfig
 				g.Expect(k8sClient.Get(ctx, types.NamespacedName{Name: testConfigName}, &fetched)).To(Succeed())
-				g.Expect(fetched.Status.VaultAddress).To(Equal("https://vault-new.example.com:8200"))
-				g.Expect(fetched.Status.VaultKeyPath).To(Equal("transit/keys/new-key"))
 				g.Expect(fetched.Status.KMSPluginImage).To(Equal(DefaultKMSPluginImage))
 			}, timeout, interval).Should(Succeed())
 		})

@@ -87,20 +87,17 @@ var _ = Describe("Vault KMS Plugin OpenShift Provider", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should reconcile the status with spec fields and plugin image", func() {
+		It("should reconcile the status with the plugin image", func() {
 			verifyStatus := func(g Gomega) {
 				config := &kmsv1alpha1.VaultKMSConfig{}
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: configName}, config)
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(config.Status.VaultAddress).To(Equal("https://vault.example.com:8200"))
-				g.Expect(config.Status.VaultKeyPath).To(Equal("transit/keys/my-key"))
 				g.Expect(config.Status.KMSPluginImage).To(Equal("quay.io/kevinrizza/test-vault-plugin-image:latest"))
-				g.Expect(string(config.Status.Authentication.Type)).To(Equal("AppRole"))
 			}
 			Eventually(verifyStatus).Should(Succeed())
 		})
 
-		It("should update the status when the spec is modified", func() {
+		It("should preserve the plugin image after the spec is modified", func() {
 			By("patching the spec with a new vault address")
 			config := &kmsv1alpha1.VaultKMSConfig{}
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: configName}, config)
@@ -111,12 +108,11 @@ var _ = Describe("Vault KMS Plugin OpenShift Provider", Ordered, func() {
 			err = k8sClient.Patch(ctx, config, patch)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("verifying the status reflects the new address")
+			By("verifying the status still has the plugin image")
 			verifyUpdated := func(g Gomega) {
 				updated := &kmsv1alpha1.VaultKMSConfig{}
 				err := k8sClient.Get(ctx, types.NamespacedName{Name: configName}, updated)
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(updated.Status.VaultAddress).To(Equal("https://vault-new.example.com:8200"))
 				g.Expect(updated.Status.KMSPluginImage).To(Equal("quay.io/kevinrizza/test-vault-plugin-image:latest"))
 			}
 			Eventually(verifyUpdated).Should(Succeed())

@@ -213,98 +213,12 @@ type VaultConfigMapReference struct {
 }
 
 // VaultKMSConfigStatus defines the observed state of VaultKMSConfig.
-// The controller copies the spec fields into the status after processing,
-// with the resolved kmsPluginImage.
 type VaultKMSConfigStatus struct {
 	// kmsPluginImage is the resolved container image for the HashiCorp Vault KMS plugin,
 	// set by the controller. This may be a tag-based or digest-based image reference.
 	//
 	// +optional
 	KMSPluginImage string `json:"kmsPluginImage,omitempty"`
-
-	// vaultAddress specifies the address of the HashiCorp Vault instance.
-	// The value must be a valid HTTPS URL containing only scheme, host, and optional port.
-	// Paths, user info, query parameters, and fragments are not allowed.
-	//
-	// Format: https://hostname[:port]
-	// Example: https://vault.example.com:8200
-	//
-	// The value must be between 1 and 512 characters.
-	//
-	// +kubebuilder:validation:XValidation:rule="isURL(self)",message="must be a valid URL"
-	// +kubebuilder:validation:XValidation:rule="isURL(self) && url(self).getScheme() == 'https'",message="must use the 'https' scheme"
-	// +kubebuilder:validation:XValidation:rule="isURL(self) && (url(self).getEscapedPath() == '' || url(self).getEscapedPath() == '/')",message="must not contain a path"
-	// +kubebuilder:validation:XValidation:rule="isURL(self) && url(self).getQuery() == {}",message="must not have a query"
-	// +kubebuilder:validation:XValidation:rule="self.find('#(.+)$') == ''",message="must not have a fragment"
-	// +kubebuilder:validation:XValidation:rule="self.find('@') == ''",message="must not have user info"
-	// +kubebuilder:validation:MaxLength=512
-	// +kubebuilder:validation:MinLength=1
-	// +optional
-	VaultAddress string `json:"vaultAddress,omitempty"`
-
-	// vaultNamespace specifies the Vault namespace where the Transit secrets engine is mounted.
-	// This is only applicable for Vault Enterprise installations.
-	// When this field is not set, no namespace is used.
-	//
-	// The value must be between 1 and 4096 characters.
-	// The namespace cannot end with a forward slash, cannot contain spaces, and cannot be one of the reserved strings: root, sys, audit, auth, cubbyhole, or identity.
-	//
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=4096
-	// +kubebuilder:validation:XValidation:rule="!self.endsWith('/')",message="vaultNamespace cannot end with a forward slash"
-	// +kubebuilder:validation:XValidation:rule="!self.contains(' ')",message="vaultNamespace cannot contain spaces"
-	// +kubebuilder:validation:XValidation:rule="!(self in ['root', 'sys', 'audit', 'auth', 'cubbyhole', 'identity'])",message="vaultNamespace cannot be a reserved string (root, sys, audit, auth, cubbyhole, identity)"
-	// +optional
-	VaultNamespace string `json:"vaultNamespace,omitempty"`
-
-	// vaultAuthNamespace specifies the Vault namespace to use for authentication.
-	// This is only applicable for Vault Enterprise installations where authentication
-	// and Transit operations may be in different namespaces.
-	// When this field is not set, the value of vaultNamespace is used for both
-	// authentication and Transit key operations.
-	//
-	// The value must be between 1 and 4096 characters.
-	// The namespace cannot end with a forward slash, cannot contain spaces, and cannot be one of the reserved strings: root, sys, audit, auth, cubbyhole, or identity.
-	//
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=4096
-	// +kubebuilder:validation:XValidation:rule="!self.endsWith('/')",message="vaultAuthNamespace cannot end with a forward slash"
-	// +kubebuilder:validation:XValidation:rule="!self.contains(' ')",message="vaultAuthNamespace cannot contain spaces"
-	// +kubebuilder:validation:XValidation:rule="!(self in ['root', 'sys', 'audit', 'auth', 'cubbyhole', 'identity'])",message="vaultAuthNamespace cannot be a reserved string (root, sys, audit, auth, cubbyhole, identity)"
-	// +optional
-	VaultAuthNamespace string `json:"vaultAuthNamespace,omitempty"`
-
-	// tls contains the TLS configuration for connecting to the Vault server.
-	// When this field is not set, system default TLS settings are used.
-	// +optional
-	TLS VaultTLSConfig `json:"tls,omitzero"`
-
-	// authentication defines the authentication method used to authenticate with Vault.
-	//
-	// +optional
-	Authentication VaultAuthentication `json:"authentication,omitzero"`
-
-	// vaultKeyPath specifies the full path to the encryption key in Vault's Transit secrets engine,
-	// combining the Transit engine mount path and the key name separated by "/keys/".
-	// Format: <mount>/keys/<key-name> (e.g., transit/keys/my-key, myteam/transit/keys/production-key).
-	//
-	// The total path length must be between 8 and 1542 characters.
-	// The path cannot start or end with a forward slash, cannot contain consecutive forward slashes,
-	// must only contain RFC 3986 unreserved characters (alphanumeric, hyphen, period, underscore, tilde)
-	// and forward slashes as path separators, and must not contain "." or ".." path segments.
-	// The key name must start and end with an alphanumeric character or underscore, and may contain
-	// alphanumeric characters, underscores, hyphens, and periods in the middle.
-	//
-	// +kubebuilder:validation:MinLength=8
-	// +kubebuilder:validation:MaxLength=1542
-	// +kubebuilder:validation:XValidation:rule="!self.startsWith('/')",message="vaultKeyPath cannot start with a forward slash"
-	// +kubebuilder:validation:XValidation:rule="!self.endsWith('/')",message="vaultKeyPath cannot end with a forward slash"
-	// +kubebuilder:validation:XValidation:rule="!self.contains('//')",message="vaultKeyPath cannot contain consecutive forward slashes"
-	// +kubebuilder:validation:XValidation:rule="self.matches('^[a-zA-Z0-9._~/-]+$')",message="vaultKeyPath must only contain RFC 3986 unreserved characters (alphanumeric, hyphen, period, underscore, tilde) and forward slashes"
-	// +kubebuilder:validation:XValidation:rule="self.split('/').filter(s, s == '.' || s == '..').size() == 0",message="vaultKeyPath must not contain '.' or '..' path segments"
-	// +kubebuilder:validation:XValidation:rule=`self.matches('^[a-zA-Z0-9._~-]+(/[a-zA-Z0-9._~-]+)*/keys/[a-zA-Z0-9_]([a-zA-Z0-9_.-]*[a-zA-Z0-9_])?$')`,message="vaultKeyPath must follow the format <mount>/keys/<key-name> where the key name starts and ends with an alphanumeric character or underscore and may contain alphanumeric characters, underscores, hyphens, and periods"
-	// +optional
-	VaultKeyPath string `json:"vaultKeyPath,omitempty"`
 }
 
 // +kubebuilder:object:root=true

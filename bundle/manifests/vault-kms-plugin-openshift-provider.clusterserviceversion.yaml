@@ -4,7 +4,7 @@ metadata:
   annotations:
     alm-examples: '[]'
     capabilities: Basic Install
-    createdAt: "2026-09-11T19:50:35Z"
+    createdAt: "2026-09-14T16:26:00Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.3
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: vault-kms-plugin-openshift-provider.v0.0.1
