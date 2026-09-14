@@ -48,13 +48,7 @@ func (r *VaultKMSConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	desired := kmsv1alpha1.VaultKMSConfigStatus{
-		KMSPluginImage:     DefaultKMSPluginImage,
-		VaultAddress:       config.Spec.VaultAddress,
-		VaultNamespace:     config.Spec.VaultNamespace,
-		VaultAuthNamespace: config.Spec.VaultAuthNamespace,
-		TLS:                config.Spec.TLS,
-		Authentication:     config.Spec.Authentication,
-		VaultKeyPath:       config.Spec.VaultKeyPath,
+		KMSPluginImage: DefaultKMSPluginImage,
 	}
 
 	if !equality.Semantic.DeepEqual(config.Status, desired) {
